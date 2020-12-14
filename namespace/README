@@ -1,0 +1,16 @@
+用unshare + chroot 模拟容器挂载
+
+1） 下载镜像文件并解压
+    # mkdir rootfs
+    # (docker export $(docker create 79bbc2316885) | tar -C rootfs -xvf -)
+    注： 79bbc2316885 是容器镜像id
+2） 通过unhshare创建一个新的命名空间
+    # unshare --pid  --mount-proc --fork /bin/bash
+3） 通过mount bind host上目录到镜像中目录
+    # sudo mount --bind /root/wlm2/l2/ /home/wlm/rootfs/mnt/
+4） 通过chroot修改host的root到镜像root
+    # chroot /home/wlm/rootfs/
+5） 挂载新建命名空间proc
+    # mount -t proc proc /proc
+6） df 确认当前命名空间挂载情况，可以看到已经从host挂载过来
+
