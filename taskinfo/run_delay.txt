@@ -1,0 +1,20 @@
+run_delay 的来源
+
+可以思考下，只要统计进入队列（rq_sched_info_arrive）到实际得到cpu运行时间的时间差，及实际占有cpu运行时间到实际离开队列（sched_info_dequeued）的时间差，即可统计完整的调度延迟。
+计算run_delay的核心参数是last_queue。 基于3.10内核代码分析。
+ 
+注意一点dequeue 和 enqueue都是在context_switch之前发生的。
+run_delay的来源为以下2个：
+1） 进入队列到实际占有cpu的时间差。
+  Start time进入队列后时间戳
+__schedule->try_to_wake_up_local->ttwu_activate->activate_task->enqueue_task-> sched_info_queued
+  End time进入队列后时间戳，在上下文切换中赋值
+__schedule ->context_switch ->prepare_task_switch ->sched_info_switch ->__sched_info_switch ->sched_info_arrive -> sched_info_reset_dequeued->run_delay赋值
+
+2） 出队列到实际离开cpu的时间差。由于被动切换（仍然处于running）造成的延迟。主动切换不会刷新last_queued的时间戳。
+  Start time 被动切换离开队列的task在上下文切换中记录开始时间
+__schedule-> context_switch-> prepare_task_switch -> sched_info_switch -> __sched_info_switch -> __sched_info_switch -> sched_info_depart ->sched_info_queued
+ 
+  End time 实际离开runqueue的时间戳
+__schedule ->deactivate_task ->dequeue_task ->sched_info_dequeued-> sched_info_reset_dequeued->赋值run_delay
+

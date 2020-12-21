@@ -1,0 +1,8 @@
+1. hrtimer(high resolution timer)
+  int hrtimer_start(struct hrtimer *timer, 
+                     ktime_t tim,
+                     const enum hrtimer_mode mode);
+
+2 return value
+  =HRTIMER_RESTART
+  HRTIMER_RESTART declare must be restart hrtimer
