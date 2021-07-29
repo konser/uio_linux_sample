@@ -10,7 +10,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
- 
+
+#define HPAGE_SIZE 2048 * 1024 
 #define    ERR_DBG_PRINT(fmt, args...) \
     do \
     { \
@@ -26,8 +27,8 @@ int main(int argc, char *argv[])
     //int ret = system("mount -t hugetlbfs hugetlbfs /wlm/hugetlb_test -o pagesize=2048K");
     //int ret1 = system("echo 10000 >  /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages");
     int fd = open("/wlm/hugetlb_test/hehe.txt", O_CREAT | O_RDWR, 0755);
-    char *huge_mem = mmap(NULL, 2048*1024*5, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    //char *huge_mem = mmap(NULL, 2048*1024*5, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, fd, 0);
+    char *huge_mem = mmap(NULL, HPAGE_SIZE*50, PROT_READ | PROT_WRITE, MAP_ANON | MAP_SHARED, fd, 0);
+    //char *huge_mem = mmap(NULL, HPAGE_SIZE*5, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, fd, 0);
  
  
     //if (ret<0)
@@ -50,14 +51,14 @@ int main(int argc, char *argv[])
  
     printf("Program Allocate :%p\n", huge_mem);
     int fd1 = open("/wlm/hugetlb_test/h1.txt", O_CREAT | O_RDWR, 0755);
-    char *huge_mem1 = mmap(NULL, 2048*1024*5, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    char *huge_mem1 = mmap(NULL, HPAGE_SIZE*5, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
     printf("Program Allocate :%p\n", huge_mem1);
     printf("press any key to access huge page\n");
     getchar();
  
  
-    memset(huge_mem, 0, 2048*5);
+    memset(huge_mem, 0, HPAGE_SIZE*50);
  
     printf("press any key to delete huge page\n");
     getchar();

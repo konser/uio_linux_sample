@@ -10,6 +10,7 @@
 #include <sys/shm.h>
 #include <stdlib.h>
  
+#define HPAGE_SIZE 2048 * 1024 
 #define    ERR_DBG_PRINT(fmt, args...) \
     do \
     { \
@@ -21,7 +22,7 @@
 int main(int argc, char *argv[])
 {
     key_t  our_key = ftok("/wlm/hugetlb_test/test", 6);
-    int shm_id = shmget(our_key, 2048*1024*5, IPC_CREAT|IPC_EXCL|SHM_HUGETLB);
+    int shm_id = shmget(our_key, HPAGE_SIZE*5, IPC_CREAT|IPC_EXCL|SHM_HUGETLB);
     char *huge_mem = shmat(shm_id, NULL, 0);
  
  
@@ -47,7 +48,7 @@ int main(int argc, char *argv[])
     getchar();
  
  
-    memset(huge_mem, 0, 2048*1024*5);
+    memset(huge_mem, 0, HPAGE_SIZE*5);
  
     printf("press any key to delete huge page\n");
     getchar();

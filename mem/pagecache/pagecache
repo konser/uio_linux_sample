@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# pagecache   This shell script takes care of starting and stopping
+#
+#
+# chkconfig: - 99 99
+# description: pagecache.
+
+### BEGIN INIT INFO
+# Provides: pagecache
+# Required-Start:
+# Required-Stop:
+# Should-Start:
+# Should-Stop:
+# Short-Description: start and stop pagecache
+# Description: bbr.
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+prog=pagecache
+lockifle=/var/lock/subsys/$prog
+
+start()
+{
+	staprun -D -o /var/log/pagecache.log  /lib/modules/2.6.32-504.23.4.el6.centos.plus.x86_64/kernel/mm/pagecache.ko
+}
+
+stop()
+{
+	pkill stap
+}
+
+status() {
+	local ret=0
+	ps aux|grep stap|grep pagecache|grep -v grep &> /dev/null || ret=1
+	return $ret
+}
+
+case "$1" in
+
+        start)
+                start
+                ;;
+        stop)
+                stop
+                ;;
+	status)
+		status
+		ret=$?
+		if [ $ret -eq 0 ]; then
+			echo "$prog is running."
+		else
+			echo "$prog is stopped."
+		fi
+		;;
+        *) 
+         echo "Usage: $0 {start|stop|status}"
+esac

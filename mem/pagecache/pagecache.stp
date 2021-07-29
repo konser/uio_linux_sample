@@ -1,0 +1,235 @@
+#!/usr/bin/stap
+
+######  NEW DEFINATION #########
+global __filenames[819200]
+global bufcache[819200]
+global pagecache[819200]
+global cache_hitcnt[819200]
+global cache_miscnt[819200]
+global buf_hitcnt[819200]
+global buf_miscnt[1000000]
+
+
+function gethost:long(temp:long)
+%{
+    struct page *page = (struct page *)STAP_ARG_temp;
+    int retval = 0;
+    if((page->mapping) &&(page->mapping->host))
+    {
+        retval = 1;
+    }
+    STAP_RETVALUE = retval;
+%}
+
+function gethost_m:long(temp:long)
+%{
+    struct address_space *mapping = (struct address_space *)STAP_ARG_temp;
+    int retval = 0;
+    if(mapping->host)
+    {
+        retval = 1;
+    }
+    STAP_RETVALUE = retval;
+%}
+
+
+#该处记录访问pagecache命中次数
+
+probe kernel.function("find_get_page").return
+{
+    if($return)
+    {
+#        printf("device name(%s)\n", $return->mapping->backing_dev_info->name$) 
+        if(gethost($return) == 1)
+        {
+            temp = $return->mapping->host
+            if((temp >> 48 & 0xffff) == 0xffff)
+            {
+                if($return->mapping->host->i_bdev)
+                {
+
+                     devid = $return->mapping->host->i_bdev->bd_dev
+                     maj = devid>>20
+	             min = devid & 0xFFFFF
+	             #记录进程访问块设备时，命中buf page的次数
+                     if(buf_miscnt[pid(), execname(), devid] > 0)
+                     {
+	                 buf_hitcnt[pid(), execname(), devid]++
+                     }
+               }
+               else
+               {
+                    ino = $return->mapping->host->i_ino
+
+	            #记录进程访问普通文件时，命中pagecache的次数
+                    if(cache_miscnt[pid(), execname(), ino] > 0)
+                    {
+	                cache_hitcnt[pid(), execname(), ino]++
+                    }
+               }
+            }
+        }
+        else
+        {
+            printf(" find_get_page NULL\n")
+            print_backtrace()
+        }
+    }
+}
+
+#该处记录访问pagecache情况， 如果mis，就需要申请page，并add page 
+
+probe vfs.add_to_page_cache
+{
+ #   printf("$mapping->host(%x)\n", $mapping->host)
+    if(gethost_m($mapping) == 1)
+    {
+        if((($mapping->host) >> 48 & 0xffff) == 0xffff)
+        {
+            if($mapping->host->i_bdev)
+            {
+                devid = $mapping->host->i_bdev->bd_dev
+		bufcache[devid]++
+		buf_miscnt[pid(),execname(),devid]++
+ #              printf("add blk_dev, filename: %s\n",find_filename(ino))
+ #              printf("add_to_page_cache(BUF), pid(%d), pname(%s) dev: 0x%x, bufcache(%d), mis:%d \n", pid(), execname(),devid, bufcache[devid, pid(),execname()], buf_miscnt[ pid(),execname(),devid])
+            }
+            else
+            {
+                pagecache[ino]++
+
+                #记录process mis情况
+                cache_miscnt[pid(),execname(), ino]++
+ #              printf("add_to_page_cache(CACHE), page(%p), name(%s), miscnt(%d)\n",$page, execname(), cache_miscnt[pid(),execname(), ino])
+            }
+        }
+    }
+    else
+    {
+        printf("add_to_page_cache NULL\n")
+        print_backtrace()
+    }
+
+}
+ 
+probe vfs.remove_from_page_cache
+{
+#    printf("$mapping->host(%x)\n", $page->mapping->host)
+    if(gethost($page) == 1)
+    {
+        if((($page->mapping->host) >> 48 & 0xffff) == 0xffff)
+        {
+            if($page->mapping->host->i_bdev)
+            {
+                devid = $page->mapping->host->i_bdev->bd_dev
+                if(bufcache[devid] <= 0)
+                {
+#                    printf("remove_from_page_cache(BUF), Not record: pname(%s) dev: %d\n",execname(), devid)
+                }
+                else
+                {
+                    bufcache[devid]--
+#                   printf("remove blk_dev, filename: %s\n",find_filename(ino))
+#                   printf("remove_from_page_cache(BUF), dev: %d bufcache(%d)\n", devid, bufcache[devid])
+                }
+            }
+            else
+            {
+                if(pagecache[ino] > 0)
+                {
+                    pagecache[ino]--
+#                   printf("remove_from_page_cache(CACHE), ino(%d), pagecache(%d)\n",ino, pagecache[ino])
+                }
+            }
+        }
+    }
+    else
+    {
+        printf(" remove_from_page_cache NULL\n")
+        print_backtrace()
+    }
+}
+
+
+probe generic.fop.open
+{
+    __filenames[ino]=filename
+}
+
+probe kernel.function("generic_file_aio_read")
+{
+    inode = $iocb->ki_filp->f_mapping->host->i_ino
+     __filenames[inode]= $iocb->ki_filp->f_path->dentry->d_iname$
+
+#    printf("file read: ino(%d) fname(%s) \n", inode, $iocb->ki_filp->f_path->dentry->d_iname$)
+}
+
+probe kernel.function("__generic_file_aio_write")
+{
+    fname = $iocb->ki_filp->f_path->dentry->d_iname$
+    inode = $iocb->ki_filp->f_mapping->host->i_ino
+    __filenames[inode]=fname
+}
+
+function find_filename(ino)
+{
+    if (ino in __filenames)
+        return __filenames[ino];
+    else return sprintf("N/A ino:%d", ino);
+}
+ 
+probe timer.s(60)
+{
+    ansi_clear_screen();
+    time = gettimeofday_s()
+    year = 1970 + time/31556926
+    left1 = time%31556926
+    month = left1/2629743 + 1
+    left2 = left1%2629743
+    day = left2/86400 + 1
+    left3 = left2%86400
+    hour = left3/3600
+    left4 = left3%3600
+    min = left4/60
+    sec = left4%60
+    
+    printf("year(%d), month(%d),day(%d), hour(%d), min(%d), sec(%d)\n",year, month,day, hour, min, sec)
+    printf ("\n %20s %20s %50s %10s %10s %10s %10s %10s %20s\n", "PROCID", "PROCNAME", "FILENAME/DEV_NO", "INODE",  "mis", "hit", "hit_perc", "SOURCE", "time")
+    foreach( [pid,execname,ino] in cache_miscnt- limit 30)
+    {
+        if(cache_miscnt[pid,execname,ino] > 0)
+        {
+            percent = 100*cache_hitcnt[pid,execname, ino] / (cache_hitcnt[pid,execname,ino] + cache_miscnt[pid,execname, ino])           
+            printf("%20d %20s %50s %11d %10d %10d %10d    cache %20d \n", pid, execname, find_filename(ino), ino, cache_miscnt[pid,execname, ino],  cache_hitcnt[pid,execname, ino], percent,gettimeofday_s());
+        }
+    }
+
+    foreach( [pid,execname, devid] in buf_miscnt- limit 30)
+    {
+        tmp = 0
+        if(buf_miscnt[pid,execname, devid] > 0)
+        {
+            percent_b = 100*buf_hitcnt[pid, execname,devid] / (buf_hitcnt[pid, execname,devid] + buf_miscnt[pid, execname,devid])
+            printf("%20d %20s %46d :%2d %11d %10d %10d %10d    buffer\n", pid, execname, devid>>20, devid&0xFFFFF, tmp, buf_miscnt[pid, execname, devid],  buf_hitcnt[ pid, execname,devid], percent_b);
+        }
+    }
+
+    printf ("\n %60s %10s %10s %10s\n", "FILENAME/DEV_NO", "INODE", "PAGE_NUM", "SOURCE")
+    foreach( ino in pagecache- limit 50)
+    {
+        if(pagecache[ino] > 0)
+        {
+            printf("%60s %11d  %10d    cache\n", find_filename(ino), ino, pagecache[ino]);
+        }
+    }
+
+    foreach(devid in bufcache- limit 30)
+    {
+        tmp = 0
+        if(bufcache[devid] > 0)
+        {
+            printf("%56d :%2d %11d %10d    buffer\n", devid>>20, devid&0xFFFFF,  tmp, bufcache[devid]);
+        }
+    }
+
+}

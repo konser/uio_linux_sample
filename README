@@ -1,1 +1,15 @@
 some practice and useful tool
+-  module_param(name, type, perm);
+　　name 既是用户看到的参数名，又是模块内接受参数的变量;
+    type 表示参数的数据类型，是下列之一：byte, short, ushort, int, uint, long, ulong, charp, bool, invbool;
+    perm 指定了在sysfs中相应文件的访问权限。访问权限与linux文件访问权限相同的方式管理，如0644，或使用stat.h中的宏如S_IRUGO表示。
+            0    表示完全关闭在sysfs中相对应的项。
+            #define S_IRUSR    00400 文件所有者可读
+            #define S_IWUSR    00200 文件所有者可写
+            #define S_IXUSR    00100 文件所有者可执行
+            #define S_IRGRP    00040 与文件所有者同组的用户可读
+            #define S_IWGRP    00020
+            #define S_IXGRP    00010
+            #define S_IROTH    00004 与文件所有者不同组的用户可读
+            #define S_IWOTH    00002
+            #define S_IXOTH    00001
