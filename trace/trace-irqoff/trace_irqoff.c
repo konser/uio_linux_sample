@@ -267,7 +267,7 @@ static enum hrtimer_restart trace_irqoff_hrtimer_handler(struct hrtimer *hrtimer
 
 	delta = now - __this_cpu_read(cpu_stack_trace->hardirq_trace.last_timestamp);
 	__this_cpu_write(cpu_stack_trace->hardirq_trace.last_timestamp, now);
-
+    printk("delta is : %llu\n", delta);
 	if (trace_irqoff_record(delta, true, true)) {
 		__this_cpu_write(cpu_stack_trace->softirq_trace.last_timestamp,
 				 now);
