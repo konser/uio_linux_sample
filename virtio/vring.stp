@@ -1,0 +1,41 @@
+#!/usr/bin/stap
+
+# centos7.6
+probe begin {
+            printf("=== begin ===\n");
+}
+
+/*
+ * virtnet_alloc_queues->netif_napi_add(virtnet_poll->virtqueue_enable_cb_prepare
+ */
+probe module("virtio_ring").function("virtqueue_enable_cb_prepare") {
+         printf("####################virtqueue_enable_cb_prepare: enable interrupts begin vq=%p################\n",$_vq)
+         printf("call:vq->vring.avail->flags=0x%x\n",$vq->vring->avail->flags)
+         print_backtrace();
+}
+
+probe module("virtio_ring").statement("virtqueue_enable_cb_prepare@drivers/virtio/virtio_ring.c:739") {
+        printf("return:vq->vring.avail->flags=0x%x\n",$vq->vring->avail->flags)
+        printf("vq->last_used_idx=0x%x\n",$vq->last_used_idx)
+        printf("vq->vring.used->idx=0x%x\n",$vq->vring->used->idx)
+        printf("vq->vring.used->flags=0x%x\n",$vq->vring->used->flags)
+        printf("######################virtqueue_enable_cb_prepare: enable interrupts end vq=%p################\n",$_vq)
+}
+
+probe module("virtio_ring").function("virtqueue_disable_cb") {
+        printf("!!!!!!!!!!!!!!!!virtqueue_disable_cb: disable interrupts begin vq=%p!!!!!!!!!!!\n",$_vq)
+        printf("call:vq->vring.avail->flags=0x%x\n",$vq->vring->avail->flags)
+        printf("call:vq->index=%d\n",$_vq->index)
+        print_backtrace();
+
+}
+
+probe module("virtio_ring").statement("virtqueue_disable_cb@drivers/virtio/virtio_ring.c:711") {
+        printf("return:vq->vring.avail->flags=0x%x\n",$vq->vring->avail->flags)
+        printf("call:vq->index=%d\n",$_vq->index)
+        printf("vq->last_used_idx=0x%x\n",$vq->last_used_idx)
+        printf("vq->vring.used->idx=0x%x\n",$vq->vring->used->idx)
+        printf("vq->vring.used->flags=0x%x\n",$vq->vring->used->flags)
+        printf("!!!!!!!!!!!!!!!!!!virtqueue_disable: disable interrupts end vq=%p!!!!!!!!!!!!!!!!!!\n",$_vq)
+}
+
