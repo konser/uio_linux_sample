@@ -1,0 +1,422 @@
+struct irq_domain {
+	struct list_head link;
+	const char *name;
+	const struct irq_domain_ops *ops;
+	void *host_data;
+	unsigned int flags;
+	unsigned int mapcount;
+
+	/* Optional data */
+	struct fwnode_handle *fwnode;
+	enum irq_domain_bus_token bus_token;
+	struct irq_domain_chip_generic *gc;
+#ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+	struct irq_domain *parent;
+#endif
+#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+	struct dentry		*debugfs_file;
+#endif
+
+	RH_KABI_RESERVE(1)
+	RH_KABI_RESERVE(2)
+	RH_KABI_RESERVE(3)
+	RH_KABI_RESERVE(4)
+
+	/* reverse map data. The linear map gets appended to the irq_domain */
+	irq_hw_number_t hwirq_max;
+	unsigned int revmap_direct_max_irq;
+	unsigned int revmap_size;
+	struct radix_tree_root revmap_tree;
+	struct mutex revmap_tree_mutex;
+	unsigned int linear_revmap[];
+};
+
+struct irq_domain_ops {
+	int (*match)(struct irq_domain *d, struct device_node *node,
+		     enum irq_domain_bus_token bus_token);
+	int (*select)(struct irq_domain *d, struct irq_fwspec *fwspec,
+		      enum irq_domain_bus_token bus_token);
+	int (*map)(struct irq_domain *d, unsigned int virq, irq_hw_number_t hw);
+	void (*unmap)(struct irq_domain *d, unsigned int virq);
+	int (*xlate)(struct irq_domain *d, struct device_node *node,
+		     const u32 *intspec, unsigned int intsize,
+		     unsigned long *out_hwirq, unsigned int *out_type);
+#ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+	/* extended V2 interfaces to support hierarchy irq_domains */
+	int (*alloc)(struct irq_domain *d, unsigned int virq,
+		     unsigned int nr_irqs, void *arg);
+	void (*free)(struct irq_domain *d, unsigned int virq,
+		     unsigned int nr_irqs);
+	int (*activate)(struct irq_domain *d, struct irq_data *irqd, bool reserve);
+	void (*deactivate)(struct irq_domain *d, struct irq_data *irq_data);
+	int (*translate)(struct irq_domain *d, struct irq_fwspec *fwspec,
+			 unsigned long *out_hwirq, unsigned int *out_type);
+#endif
+#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+	void (*debug_show)(struct seq_file *m, struct irq_domain *d,
+			   struct irq_data *irqd, int ind);
+#endif
+};
+struct irq_domain_chip_generic {
+	unsigned int		irqs_per_chip;
+	unsigned int		num_chips;
+	unsigned int		irq_flags_to_clear;
+	unsigned int		irq_flags_to_set;
+	enum irq_gc_flags	gc_flags;
+	struct irq_chip_generic	*gc[0];
+};
+
+struct irq_chip_generic {
+	raw_spinlock_t		lock;
+	void __iomem		*reg_base;
+	u32			(*reg_readl)(void __iomem *addr);
+	void			(*reg_writel)(u32 val, void __iomem *addr);
+	void			(*suspend)(struct irq_chip_generic *gc);
+	void			(*resume)(struct irq_chip_generic *gc);
+	unsigned int		irq_base;
+	unsigned int		irq_cnt;
+	u32			mask_cache;
+	u32			type_cache;
+	u32			polarity_cache;
+	u32			wake_enabled;
+	u32			wake_active;
+	unsigned int		num_ct;
+	void			*private;
+	unsigned long		installed;
+	unsigned long		unused;
+	struct irq_domain	*domain;
+	struct list_head	list;
+	struct irq_chip_type	chip_types[0];
+};
+struct irq_chip_type {
+	struct irq_chip		chip;
+	struct irq_chip_regs	regs;
+	irq_flow_handler_t	handler;
+	u32			type;
+	u32			mask_cache_priv;
+	u32			*mask_cache;
+};
+
+struct irq_chip {
+	struct device	*parent_device;
+	const char	*name;
+	unsigned int	(*irq_startup)(struct irq_data *data);
+	void		(*irq_shutdown)(struct irq_data *data);
+	void		(*irq_enable)(struct irq_data *data);
+	void		(*irq_disable)(struct irq_data *data);
+
+	void		(*irq_ack)(struct irq_data *data);
+	void		(*irq_mask)(struct irq_data *data);
+	void		(*irq_mask_ack)(struct irq_data *data);
+	void		(*irq_unmask)(struct irq_data *data);
+	void		(*irq_eoi)(struct irq_data *data);
+
+	int		(*irq_set_affinity)(struct irq_data *data, const struct cpumask *dest, bool force);
+	int		(*irq_retrigger)(struct irq_data *data);
+	int		(*irq_set_type)(struct irq_data *data, unsigned int flow_type);
+	int		(*irq_set_wake)(struct irq_data *data, unsigned int on);
+
+	void		(*irq_bus_lock)(struct irq_data *data);
+	void		(*irq_bus_sync_unlock)(struct irq_data *data);
+
+	void		(*irq_cpu_online)(struct irq_data *data);
+	void		(*irq_cpu_offline)(struct irq_data *data);
+
+	void		(*irq_suspend)(struct irq_data *data);
+	void		(*irq_resume)(struct irq_data *data);
+	void		(*irq_pm_shutdown)(struct irq_data *data);
+
+	void		(*irq_calc_mask)(struct irq_data *data);
+
+	void		(*irq_print_chip)(struct irq_data *data, struct seq_file *p);
+	int		(*irq_request_resources)(struct irq_data *data);
+	void		(*irq_release_resources)(struct irq_data *data);
+
+	void		(*irq_compose_msi_msg)(struct irq_data *data, struct msi_msg *msg);
+	void		(*irq_write_msi_msg)(struct irq_data *data, struct msi_msg *msg);
+
+	int		(*irq_get_irqchip_state)(struct irq_data *data, enum irqchip_irq_state which, bool *state);
+	int		(*irq_set_irqchip_state)(struct irq_data *data, enum irqchip_irq_state which, bool state);
+
+	int		(*irq_set_vcpu_affinity)(struct irq_data *data, void *vcpu_info);
+
+	void		(*ipi_send_single)(struct irq_data *data, unsigned int cpu);
+	void		(*ipi_send_mask)(struct irq_data *data, const struct cpumask *dest);
+
+	unsigned long	flags;
+};
+struct irq_chip_regs {
+	unsigned long		enable;
+	unsigned long		disable;
+	unsigned long		mask;
+	unsigned long		ack;
+	unsigned long		eoi;
+	unsigned long		type;
+	unsigned long		polarity;
+};
+struct gic_chip_data {
+	struct fwnode_handle	*fwnode;
+	void __iomem		*dist_base;
+	struct redist_region	*redist_regions;
+	struct rdists		rdists;
+	struct irq_domain	*domain;
+	u64			redist_stride;
+	u32			nr_redist_regions;
+	u64			flags;
+	bool			has_rss;
+	unsigned int		ppi_nr;
+	struct partition_desc	**ppi_descs;
+};
+struct redist_region {
+	void __iomem		*redist_base;
+	phys_addr_t		phys_base;
+	bool			single_redist;
+};
+struct rdists {
+	struct {
+		raw_spinlock_t	rd_lock;
+		void __iomem	*rd_base;
+		struct page	*pend_page;
+		phys_addr_t	phys_base;
+		bool		lpi_enabled;
+		cpumask_t	*vpe_table_mask;
+		void		*vpe_l1_base;
+	} __percpu		*rdist;
+	phys_addr_t		prop_table_pa;
+	void			*prop_table_va;
+	u64			flags;
+	u32			gicd_typer;
+	u32			gicd_typer2;
+	bool			has_vlpis;
+	bool			has_rvpeid;
+	bool			has_direct_lpi;
+	bool			has_vpend_valid_dirty;
+};
+struct partition_desc {
+	int				nr_parts;
+	struct partition_affinity	*parts;
+	struct irq_domain		*domain;
+	struct irq_desc			*chained_desc;
+	unsigned long			*bitmap;
+	struct irq_domain_ops		ops;
+};
+struct partition_affinity {
+	cpumask_t			mask;
+	void				*partition_id;
+};
+struct irq_desc {
+	struct irq_common_data	irq_common_data;
+	struct irq_data		irq_data;
+	unsigned int __percpu	*kstat_irqs;
+	irq_flow_handler_t	handle_irq;
+#ifdef CONFIG_IRQ_PREFLOW_FASTEOI
+	irq_preflow_handler_t	preflow_handler;
+#endif
+	struct irqaction	*action;	/* IRQ action list */
+	unsigned int		status_use_accessors;
+	unsigned int		core_internal_state__do_not_mess_with_it;
+	unsigned int		depth;		/* nested irq disables */
+	unsigned int		wake_depth;	/* nested wake enables */
+	unsigned int		irq_count;	/* For detecting broken IRQs */
+	RH_KABI_FILL_HOLE(unsigned int tot_count)
+	unsigned long		last_unhandled;	/* Aging timer for unhandled count */
+	unsigned int		irqs_unhandled;
+	atomic_t		threads_handled;
+	int			threads_handled_last;
+	raw_spinlock_t		lock;
+	struct cpumask		*percpu_enabled;
+	const struct cpumask	*percpu_affinity;
+#ifdef CONFIG_SMP
+	const struct cpumask	*affinity_hint;
+	struct irq_affinity_notify *affinity_notify;
+#ifdef CONFIG_GENERIC_PENDING_IRQ
+	cpumask_var_t		pending_mask;
+#endif
+#endif
+	unsigned long		threads_oneshot;
+	atomic_t		threads_active;
+	wait_queue_head_t       wait_for_threads;
+#ifdef CONFIG_PM_SLEEP
+	unsigned int		nr_actions;
+	unsigned int		no_suspend_depth;
+	unsigned int		cond_suspend_depth;
+	unsigned int		force_resume_depth;
+#endif
+#ifdef CONFIG_PROC_FS
+	struct proc_dir_entry	*dir;
+#endif
+#ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+	struct dentry		*debugfs_file;
+	const char		*dev_name;
+#endif
+#ifdef CONFIG_SPARSE_IRQ
+	struct rcu_head		rcu;
+	struct kobject		kobj;
+#endif
+	struct mutex		request_mutex;
+	int			parent_irq;
+	struct module		*owner;
+	const char		*name;
+};
+
+/**
+ * struct irq_common_data - per irq data shared by all irqchips
+ * @state_use_accessors: status information for irq chip functions.
+ *			Use accessor functions to deal with it
+ * @node:		node index useful for balancing
+ * @handler_data:	per-IRQ data for the irq_chip methods
+ * @affinity:		IRQ affinity on SMP. If this is an IPI
+ *			related irq, then this is the mask of the
+ *			CPUs to which an IPI can be sent.
+ * @effective_affinity:	The effective IRQ affinity on SMP as some irq
+ *			chips do not allow multi CPU destinations.
+ *			A subset of @affinity.
+ * @msi_desc:		MSI descriptor
+ * @ipi_offset:		Offset of first IPI target cpu in @affinity. Optional.
+ */
+struct irq_common_data {
+	unsigned int		__private state_use_accessors;
+#ifdef CONFIG_NUMA
+	unsigned int		node;
+#endif
+	void			*handler_data;
+	struct msi_desc		*msi_desc;
+	cpumask_var_t		affinity;
+#ifdef CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK
+	cpumask_var_t		effective_affinity;
+#endif
+#ifdef CONFIG_GENERIC_IRQ_IPI
+	unsigned int		ipi_offset;
+#endif
+};
+/**
+ * struct msi_desc - Descriptor structure for MSI based interrupts
+ * @list:	List head for management
+ * @irq:	The base interrupt number
+ * @nvec_used:	The number of vectors used
+ * @dev:	Pointer to the device which uses this descriptor
+ * @msg:	The last set MSI message cached for reuse
+ * @affinity:	Optional pointer to a cpu affinity mask for this descriptor
+ *
+ * @write_msi_msg:	Callback that may be called when the MSI message
+ *			address or data changes
+ * @write_msi_msg_data:	Data parameter for the callback.
+ *
+ * @masked:	[PCI MSI/X] Mask bits
+ * @is_msix:	[PCI MSI/X] True if MSI-X
+ * @multiple:	[PCI MSI/X] log2 num of messages allocated
+ * @multi_cap:	[PCI MSI/X] log2 num of messages supported
+ * @maskbit:	[PCI MSI/X] Mask-Pending bit supported?
+ * @is_64:	[PCI MSI/X] Address size: 0=32bit 1=64bit
+ * @entry_nr:	[PCI MSI/X] Entry which is described by this descriptor
+ * @default_irq:[PCI MSI/X] The default pre-assigned non-MSI irq
+ * @mask_pos:	[PCI MSI]   Mask register position
+ * @mask_base:	[PCI MSI-X] Mask register base address
+ * @platform:	[platform]  Platform device specific msi descriptor data
+ * @fsl_mc:	[fsl-mc]    FSL MC device specific msi descriptor data
+ */
+struct  msi_desc {
+	/* Shared device/bus type independent data */
+	struct list_head		list;
+	unsigned int			irq;
+	unsigned int			nvec_used;
+	struct device			*dev;
+	struct msi_msg			msg;
+	struct irq_affinity_desc	*affinity;
+#ifdef CONFIG_IRQ_MSI_IOMMU
+	const void			*iommu_cookie;
+#endif
+
+	void (*write_msi_msg)(struct msi_desc *entry, void *data);
+	void *write_msi_msg_data;
+
+	union {
+		/* PCI MSI/X specific data */
+		struct {
+			u32 masked;
+			struct {
+				u8	is_msix		: 1;
+				u8	multiple	: 3;
+				u8	multi_cap	: 3;
+				u8	maskbit		: 1;
+				u8	is_64		: 1;
+				u8	is_virtual	: 1;
+				u16	entry_nr;
+				unsigned default_irq;
+			} msi_attrib;
+			union {
+				u8	mask_pos;
+				void __iomem *mask_base;
+			};
+		};
+
+		/*
+		 * Non PCI variants add their data structure here. New
+		 * entries need to use a named structure. We want
+		 * proper name spaces for this. The PCI part is
+		 * anonymous for now as it would require an immediate
+		 * tree wide cleanup.
+		 */
+		struct platform_msi_desc platform;
+		struct fsl_mc_msi_desc fsl_mc;
+	};
+};
+/**
+ * struct irq_data - per irq chip data passed down to chip functions
+ * @mask:		precomputed bitmask for accessing the chip registers
+ * @irq:		interrupt number
+ * @hwirq:		hardware interrupt number, local to the interrupt domain
+ * @common:		point to data shared by all irqchips
+ * @chip:		low level interrupt hardware access
+ * @domain:		Interrupt translation domain; responsible for mapping
+ *			between hwirq number and linux irq number.
+ * @parent_data:	pointer to parent struct irq_data to support hierarchy
+ *			irq_domain
+ * @chip_data:		platform-specific per-chip private data for the chip
+ *			methods, to allow shared chip implementations
+ */
+struct irq_data {
+	u32			mask;
+	unsigned int		irq;
+	unsigned long		hwirq;
+	struct irq_common_data	*common;
+	struct irq_chip		*chip;
+	struct irq_domain	*domain;
+#ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+	struct irq_data		*parent_data;
+#endif
+	void			*chip_data;
+};
+
+/**
+ * struct irqaction - per interrupt action descriptor
+ * @handler:	interrupt handler function
+ * @name:	name of the device
+ * @dev_id:	cookie to identify the device
+ * @percpu_dev_id:	cookie to identify the device
+ * @next:	pointer to the next irqaction for shared interrupts
+ * @irq:	interrupt number
+ * @flags:	flags (see IRQF_* above)
+ * @thread_fn:	interrupt handler function for threaded interrupts
+ * @thread:	thread pointer for threaded interrupts
+ * @secondary:	pointer to secondary irqaction (force threading)
+ * @thread_flags:	flags related to @thread
+ * @thread_mask:	bitmask for keeping track of @thread activity
+ * @dir:	pointer to the proc/irq/NN/name entry
+ */
+struct irqaction {
+	irq_handler_t		handler;
+	void			*dev_id;
+	void __percpu		*percpu_dev_id;
+	struct irqaction	*next;
+	irq_handler_t		thread_fn;
+	struct task_struct	*thread;
+	struct irqaction	*secondary;
+	unsigned int		irq;
+	unsigned int		flags;
+	unsigned long		thread_flags;
+	unsigned long		thread_mask;
+	const char		*name;
+	struct proc_dir_entry	*dir;
+};
+#} ____cacheline_internodealigned_in_smp;
