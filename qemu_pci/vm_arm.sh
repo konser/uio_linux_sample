@@ -12,12 +12,11 @@ qemu-kvm -machine virt,gic_version=host,usb=off,accel=kvm \
         -cpu host -smp 12,sockets=6,cores=2,threads=1 -boot menu=on -m 8192 \
          -boot menu=on \
         -bios /usr/share/edk2/aarch64/QEMU_EFI-pflash.raw \
-        -drive file=/home/lixu/ft-2000-centos.raw,media=disk,format=raw,if=none,id=systemdisk \
+        -drive file=/home/wlm/ft-2000-centos.raw,media=disk,format=raw,if=none,id=systemdisk \
         -device virtio-blk-pci,scsi=off,addr=0x04,drive=systemdisk,id=systemdiskvirtio,bootindex=0 \
         -netdev tap,id=enp25s0f0v0,ifname=vnet0,script=no,downscript=no,vhost=on \
         -device virtio-net-pci,netdev=enp25s0f0v0,mac=82:0a:5e:71:bd:4a \
         -vnc :21 -D /var/log/qemu-1.log -chardev file,path=/var/log/mg.log,id=char0 \
-        -serial telnet:localhost:4321,server,nowait \
         --daemonize
 
 #brctl addif virbr0 vnet0

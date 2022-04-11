@@ -1,0 +1,159 @@
+#!/usr/bin/stap
+
+# for tlp is limited as 2048pps, so fpga's tlp maybe can't arrive
+# front. so iowrite/ioread exception
+# 由堆栈及stap抓取到的返回值可知出错路径
+#
+# vp_find_vqs->vp_find_vqs_msix->vp_request_msix_vectors
+# 因为stap中vp_find_vqs_msix 前没抓到vp_setup_vq，所以失败的函数可以断定是vp_request_msix_vectors
+#
+# 因为287行之前request_threaded_irq  返回值是0，所以没有报错。可知报错的地方在config_vector 回调上,
+# 即 vp_config_vector 函数，其中-EBUSY就是我们stap抓到的返回值-16
+#
+#irq_calc_affinity_vectors return fail=3
+#__pci_enable_msix_range return fail=3
+#pci_alloc_irq_vectors_affinity return fail=3
+#request_threaded_irq irq=114,irqflags=0
+#request_threaded_irq return fail=0
+#vp_find_vqs_msix return fail=-16
+#pci_alloc_irq_vectors_affinity min_vecs=2,max_vecs=2,flags=4
+#__pci_enable_msix_range return fail=2
+#pci_alloc_irq_vectors_affinity return fail=2
+#request_threaded_irq irq=114,irqflags=0
+#request_threaded_irq return fail=0
+#vp_find_vqs_msix return fail=-16
+#request_threaded_irq irq=0,irqflags=80
+#request_threaded_irq return fail=-16
+#vp_find_vqs return -16
+#virtio_dev_probe return -16
+#virtio_finalize_features return 0
+#pci_alloc_irq_vectors_affinity min_vecs=3,max_vecs=3,flags=c
+#irq_calc_affinity_vectors return fail=3
+#__pci_enable_msix_range return fail=3
+
+# other output at modern scenear
+#pci_alloc_irq_vectors_affinity min_vecs=9,max_vecs=9,flags=4
+#__pci_enable_msix_range return fail=-12
+#pci_alloc_irq_vectors_affinity return fail=-28
+#vp_find_vqs_msix return fail=-28
+#pci_alloc_irq_vectors_affinity min_vecs=2,max_vecs=2,flags=4
+#__pci_enable_msix_range return fail=-12
+#pci_alloc_irq_vectors_affinity return fail=-28
+#vp_find_vqs_msix return fail=-28
+#request_threaded_irq irq=0,irqflags=80
+#request_threaded_irq return fail=-16
+#vp_find_vqs return -16
+#vp_modern_find_vqs return fail=-16
+#virtio_dev_probe return -16
+
+
+probe begin {
+printf("begin\n");
+}
+
+#probe kernel.function("_pci_assign_resource").call
+#{
+#     printf("pci_dev=%p,resno=%d,size=%u",$dev,$resno,$size);
+#}
+
+#probe kernel.function("_pci_assign_resource").return
+probe kernel.function("_pci_assign_resource").return
+{
+   /* 32902=0x8086 is used to filted the intel pcie port */
+   if($return <0 && $dev->vendor != 32902)
+   {
+     printf("_pci_assign_resource return fail=%d %s\n",$return, $dev$);
+   }
+}
+
+probe kernel.function("vp_find_vqs").return
+{
+  if($return)
+    {
+            printf("vp_find_vqs return %d\n",$return);
+    }
+
+}
+#probe kernel.function("virtio_pci_modern_probe")
+#{
+#   print_backtrace();
+#}
+#
+#probe kernel.function("virtio_pci_modern_probe").return
+#{
+#   printf("virtio_pci_modern_probe return %d\n",$return);
+#}
+
+
+probe kernel.function("virtio_dev_probe").return
+{
+   printf("virtio_dev_probe return %d\n",$return);
+}
+
+
+probe kernel.function("virtio_finalize_features").return
+{
+   printf("virtio_finalize_features return %d\n",$return);
+}
+
+probe module("virtio_net").function("virtnet_probe")
+{
+   print_backtrace();
+}
+
+#probe kernel.function("vp_modern_find_vqs").return
+#{
+#   if($return <0)
+#   {
+#     printf("vp_modern_find_vqs return fail=%d\n",$return);
+#
+#   }
+#}
+#
+probe kernel.function("vp_find_vqs_msix").return
+{
+   if($return <0)
+   {
+     printf("vp_find_vqs_msix return fail=%d\n",$return);
+
+   }
+}
+probe kernel.function("vp_setup_vq").return
+{
+     printf("vp_setup_vq return fail=%p\n",$return);
+}
+
+probe kernel.function("request_threaded_irq").call
+{
+     printf("request_threaded_irq irq=%d,irqflags=%x\n",$irq,$irqflags);
+}
+
+probe kernel.function("request_threaded_irq").return
+{
+     printf("request_threaded_irq return fail=%d\n",$return);
+}
+
+probe kernel.function("pci_alloc_irq_vectors_affinity").call
+{
+     printf("pci_alloc_irq_vectors_affinity min_vecs=%d,max_vecs=%d,flags=%x\n",$min_vecs,$max_vecs,$flags);
+}
+
+probe kernel.function("pci_alloc_irq_vectors_affinity").return
+{
+     printf("pci_alloc_irq_vectors_affinity return fail=%d\n",$return);
+}
+
+probe kernel.function("__pci_enable_msix_range").return
+{
+     printf("__pci_enable_msix_range return fail=%d\n",$return);
+}
+
+probe kernel.function("__pci_enable_msi_range").return
+{
+     printf("__pci_enable_msi_range return fail=%d\n",$return);
+}
+
+probe kernel.function("irq_calc_affinity_vectors").return
+{
+     printf("irq_calc_affinity_vectors return fail=%d\n",$return);
+}

@@ -1,0 +1,58 @@
+begin
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40f080
+virtio_dev_probe return 0
+virtio_finalize_features return 0
+pci_alloc_irq_vectors_affinity min_vecs=3,max_vecs=3,flags=c
+irq_calc_affinity_vectors return fail=3
+__pci_enable_msix_range return fail=3
+pci_alloc_irq_vectors_affinity return fail=3
+request_threaded_irq irq=114,irqflags=0
+request_threaded_irq return fail=0
+vp_find_vqs_msix return fail=-16
+pci_alloc_irq_vectors_affinity min_vecs=2,max_vecs=2,flags=4
+__pci_enable_msix_range return fail=2
+pci_alloc_irq_vectors_affinity return fail=2
+request_threaded_irq irq=114,irqflags=0
+request_threaded_irq return fail=0
+vp_find_vqs_msix return fail=-16
+request_threaded_irq irq=0,irqflags=80
+request_threaded_irq return fail=-16
+vp_find_vqs return -16
+virtio_dev_probe return -16
+virtio_finalize_features return 0
+pci_alloc_irq_vectors_affinity min_vecs=3,max_vecs=3,flags=c
+irq_calc_affinity_vectors return fail=3
+__pci_enable_msix_range return fail=3
+pci_alloc_irq_vectors_affinity return fail=3
+request_threaded_irq irq=114,irqflags=0
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40f440
+request_threaded_irq irq=115,irqflags=0
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40e840
+request_threaded_irq irq=116,irqflags=0
+request_threaded_irq return fail=0
+virtio_dev_probe return 0
+virtio_finalize_features return 0
+ 0xffffffffc024c470 : virtnet_probe+0x0/0x870 [virtio_net]
+ 0xffffffffa8d70578 : virtio_dev_probe+0x158/0x1f0 [kernel]
+ 0xffffffffa88635e0 : kretprobe_trampoline+0x0/0x50 [kernel]
+ 0xffff8f291e43e010
+ 0xffff8f291e43e010 (inexact)
+pci_alloc_irq_vectors_affinity min_vecs=9,max_vecs=9,flags=4
+__pci_enable_msix_range return fail=9
+pci_alloc_irq_vectors_affinity return fail=9
+request_threaded_irq irq=117,irqflags=0
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40f200
+request_threaded_irq irq=118,irqflags=0
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40fe00
+request_threaded_irq irq=119,irqflags=0
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40ee40
+request_threaded_irq irq=130,irqflags=0
+request_threaded_irq return fail=0
+vp_setup_vq return fail=0xffff8f291e40e6c0
+request_threaded_irq irq=131,irqflags=0
