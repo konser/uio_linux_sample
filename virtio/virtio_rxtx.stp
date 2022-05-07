@@ -1,0 +1,55 @@
+#!/usr/bin/stap
+
+# centos 8.4
+# ---------virtio net 发包过程-------
+# start_xmit()
+# 	|- xmit_skb()
+#		|- virtqueue_add_outbuf()
+#			|- virtqueue_add
+# 	|- virtqueue_kick_prepare()
+# 	|- virtqueue_notify()
+# virtio发送数据包的过程会先通过virtqueue_add_outbuf将skb添加到virtio发送队列中，
+# 然后通过virtqueue_kick_prepare和virtqueue_notify使能后端搬运队列中的数据。
+# 这里的后端是qemu中vhost部分完成的，非虚拟化场景应该是由后端硬件完成搬移的，
+# 现在也有DPDK技术支持用户态驱动采用vhost进行数据搬移来降低虚拟化开销	
+# ---------virtio-net 收包过程------
+# vp_interrupt -> vp_vring_interrupt -> vring_interrupt -> vq->vq.callback=skb_recv_done;
+# virtio在初始化的时候会注册回调函数来处理设备返回的信息，
+# 在virtio的接收队列rxq中就注册了skb_recv_done函数用于在接收队列收到数据包后调用。
+# virtio在skb_recv_done中采用了linux的napi机制进行高效的数据包处理：
+# 中断用来唤醒数据包处理程序，处理程序采用poll方式不断查询处理数据包。
+# virtio-net中virtnet_poll函数在不断轮询处理接收到的数据包。
+
+# centos8.4
+probe begin {
+	printf("=== begin ===\n");
+}
+
+probe module("virtio_net").function("start_xmit").call {
+	//print_backtrace();
+}
+
+probe module("virtio_net").function("xmit_skb") {
+	printf("xmit_skb: %s\n", $$parms);
+	//print_backtrace();
+}
+
+probe kernel.function("virtqueue_add_outbuf").return {
+	printf("virtqueue_add_outbuf %d\n", $return);
+}
+
+probe kernel.function("virtqueue_add").return {
+	printf("virtqueue_add %d\n", $return);
+}
+
+probe kernel.function("virtqueue_notify").return {
+	printf("virtqueue_notify(ret is bool): %d\n", $return);
+}
+
+probe module("virtio_net").function("skb_recv_done").call {
+	printf("recv virtqueue %p\n", $rvq);
+}
+
+probe module("virtio_net").function("skb_xmit_done").call {
+	printf("xmit virtqueue %p\n", $vq);
+}

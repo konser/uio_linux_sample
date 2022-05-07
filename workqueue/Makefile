@@ -1,4 +1,4 @@
-obj-m += sys_wq.o
+obj-m += wq.o
 
 KERNELDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
@@ -9,7 +9,7 @@ clean:
 	rm -rf *.ko *.mod* *.o modules.* Module.symvers
 
 install:
-	insmod sys_wq.ko
+	insmod wq.ko
 
 remove:
-	rmmod sys_wq
+	rmmod wq
